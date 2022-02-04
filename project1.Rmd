@@ -1,0 +1,15 @@
+---
+title: <center> TMA4275 Lifetime Analysis  </center>
+      <center> Obligatory project 1 </center>
+author: "Jim Totland"
+date: "2/4/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1
+
+# Problem 2
