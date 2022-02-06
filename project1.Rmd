@@ -8,8 +8,92 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(utile.visuals)
 ```
 
 # Problem 1
+## a)
+Some intro and description...
+First, we create data frame containing the relevant data.
+```{r}
+df <- data.frame(
+  months = c(23,47,69,70,71,100,101,148,181,198,208,212,224,
+             5,8,10,13,18,24,26,31,35,50,59,61,76,109,116,118,143,154,162,225),
+  stained =  c(0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+  censored = c(0,0,0,1,1,1,1,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1,1,1))
+
+```
+
+
+```{r}
+group1 <- filter(df, stained == 0)
+group2 <- filter(df, stained == 1)
+n <- 250 # Points on the time-axis
+t <- 1:n
+y1 <- rep(0,n)
+y2 <- rep(0,n)
+for(i in 1:length(t)){
+  y1[i] <- sum(group1$months > t[i])
+  y2[i] <- sum(group2$months > t[i])
+}
+ggplot(data.frame(t = t, y1 = y1, y2 = y2)) + geom_step(aes(t, y1, color = "1")) + geom_step(aes(t, y2, color = "2")) +
+  ylab("Number of Individuals") + xlab("t (study time)") +
+  scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
+
+
+```
+
+## b)
+```{r}
+N.A.est <- function(df, alpha, conf.int.type, t){
+  y <- rep(0, length(t))
+  for(i in 1:length(t)){
+    y[i] <- sum(df$months > t[i])
+  }
+  A.hat <- cumsum(1/y)
+  # Fix infinite values:
+  A.hat[min(which(!is.finite(A.hat))):length(A.hat)] <- A.hat[min(which(!is.finite(A.hat))) - 1]
+  sigma.hat <- sqrt(cumsum(1/y^2))
+   # Fix infinite values:
+  sigma.hat[min(which(!is.finite(sigma.hat))):length(sigma.hat)] <- sigma.hat[min(which(!is.finite(sigma.hat))) - 1]
+  z = qnorm(1 - alpha/2)
+  upper <- lower <- NA
+  if(conf.int.type == 1){
+    upper <-  A.hat + z*sigma.hat
+    lower <- A.hat - z*sigma.hat
+  }
+  else if(conf.int.type == 2){
+    upper <- A.hat * exp(z*sigma.hat/A.hat)
+    lower <- A.hat * exp(-z*sigma.hat/A.hat)
+  }
+  else{
+    stop("Invalid conf.int.type")
+  }
+  return(data.frame(A.hat = A.hat, upper = upper, lower = lower, t = t))
+}
+```
+
+
+```{r}
+df1 <- N.A.est(group1, 0.05, 1, t)
+df2 <- N.A.est(group2, 0.05, 1, t)
+ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
+  geom_stepconfint(aes(x = t, ymin=lower, ymax=upper),fill = "#e0474c", alpha = 0.2) +
+  geom_step(data = df2, aes(x = t, y = A.hat, color = "2")) +
+  geom_stepconfint(data = df2, aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
+  scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
+
+df1 <- N.A.est(group1, 0.05, 2, t)
+df2 <- N.A.est(group2, 0.05, 2, t)
+ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
+  geom_stepconfint(aes(x = t, ymin=lower, ymax=upper),fill = "#e0474c", alpha = 0.2) +
+  geom_step(data = df2, aes(x = t, y = A.hat, color = "2")) +
+  geom_stepconfint(data = df2, aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
+  scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
+  
+```
+
 
 # Problem 2
