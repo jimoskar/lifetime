@@ -12,11 +12,16 @@ library(dplyr)
 library(ggplot2)
 library(utile.visuals)
 ```
+In this exercise we consider results from an old investigation to evaluate a histochemical marker that discriminates between primary breast cancer that has metastasized and that which has not. The marker under study is denoted HPA. Each tumor was treated with this marker and hence classified as either positively or negatively stained. The data which will be used is given below. The survival times of each woman is given in months and classified according to whether their tumor was negatively or positively stained. Censored survival times are labeled with an asterisk (*).
+
+```{r, out.height="40%", fig.align='center', echo=FALSE}
+knitr::include_graphics("data.png")
+```
+In the following we denote patients with negatively stained tumors as group 1 and patients with positively stained tumors as group 2.
 
 # Problem 1
 ## a)
-Some intro and description...
-First, we create data frame containing the relevant data.
+First, a data frame containing the data presented above is constructed.
 ```{r}
 df <- data.frame(
   months = c(23,47,69,70,71,100,101,148,181,198,208,212,224,
@@ -26,8 +31,8 @@ df <- data.frame(
 
 ```
 
-
-```{r}
+Next, the risk set for each of the two groups, $Y_1(t)$ and $Y_2(t)$ respectively, are plotted as functions of the study time, $t$. The result is given in figure 1.
+```{r, fig.cap= "The risk set of group 1 and 2."}
 group1 <- filter(df, stained == 0)
 group2 <- filter(df, stained == 1)
 n <- 250 # Points on the time-axis
@@ -41,13 +46,20 @@ for(i in 1:length(t)){
 ggplot(data.frame(t = t, y1 = y1, y2 = y2)) + geom_step(aes(t, y1, color = "1")) + geom_step(aes(t, y2, color = "2")) +
   ylab("Number of Individuals") + xlab("t (study time)") +
   scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
-
-
 ```
 
+From figure 1, we observe that group 2 has a much steeper trend than group 1.
+
 ## b)
+Below, a function computing the Nelson-Aalen estimator of the integrated hazard rate, $A(t)$, over the grid $t$ and a corresponding confidence interval with significance level $\alpha$ is given. We refer to the comments in the code for further documentation. 
 ```{r}
 N.A.est <- function(df, alpha, conf.int.type, t){
+  
+    # df: data frame with survival times
+    # alpha: significance level of conf.int
+    # conf.int.type: type of confidence interval, (1) regular or (2) log-type.
+    # t: time grid
+  
   y <- rep(0, length(t))
   for(i in 1:length(t)){
     y[i] <- sum(df$months > t[i])
@@ -75,8 +87,9 @@ N.A.est <- function(df, alpha, conf.int.type, t){
 }
 ```
 
+In the following, the Nelson-Aalen estimator is computed and plotted for the two groups. Figure 2 uses regular confidence intervals, while in figure 3, the confidence interval based on the log-transform is used.
 
-```{r}
+```{r, fig.cap="The Nelson-Aalen estimator of the integrated hazard rate with regular confidence intervals."}
 df1 <- N.A.est(group1, 0.05, 1, t)
 df2 <- N.A.est(group2, 0.05, 1, t)
 ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
@@ -84,7 +97,10 @@ ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) +
   geom_step(data = df2, aes(x = t, y = A.hat, color = "2")) +
   geom_stepconfint(data = df2, aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
   scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
+```
 
+
+```{r, fig.cap="The Nelson-Aalen estimator of the integrated hazard rate with confidence intervals based on the log-transform."}
 df1 <- N.A.est(group1, 0.05, 2, t)
 df2 <- N.A.est(group2, 0.05, 2, t)
 ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
