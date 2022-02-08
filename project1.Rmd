@@ -23,11 +23,14 @@ In the following we denote patients with negatively stained tumors as group 1 an
 ## a)
 First, a data frame containing the data presented above is constructed.
 ```{r}
+# T.tilde corresponds to the right censored lifetimes, while D indicates if the lifetime is right-censored.
+# This notation is introduced in problem 2.
+
 df <- data.frame(
-  months = c(23,47,69,70,71,100,101,148,181,198,208,212,224,
+  T.tilde = c(23,47,69,70,71,100,101,148,181,198,208,212,224,
              5,8,10,13,18,24,26,31,35,50,59,61,76,109,116,118,143,154,162,225),
   stained =  c(0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
-  censored = c(0,0,0,1,1,1,1,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1,1,1))
+  D = c(0,0,0,1,1,1,1,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1,1,1))
 
 ```
 
@@ -40,8 +43,8 @@ t <- 1:n
 y1 <- rep(0,n)
 y2 <- rep(0,n)
 for(i in 1:length(t)){
-  y1[i] <- sum(group1$months > t[i])
-  y2[i] <- sum(group2$months > t[i])
+  y1[i] <- sum(group1$T.tilde > t[i])
+  y2[i] <- sum(group2$T.tilde > t[i])
 }
 ggplot(data.frame(t = t, y1 = y1, y2 = y2)) + geom_step(aes(t, y1, color = "1")) + geom_step(aes(t, y2, color = "2")) +
   ylab("Number of Individuals") + xlab("t (study time)") +
@@ -62,7 +65,7 @@ N.A.est <- function(df, alpha, conf.int.type, t){
   
   y <- rep(0, length(t))
   for(i in 1:length(t)){
-    y[i] <- sum(df$months > t[i])
+    y[i] <- sum(df$T.tilde > t[i])
   }
   A.hat <- cumsum(1/y)
   # Fix infinite values:
@@ -111,5 +114,156 @@ ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) +
   
 ```
 
+From figure 2 and 3, we observe that $\hat{A}(t)$ grows much faster for group 2 than for group 1.
 
 # Problem 2
+## a)
+We now want to evaluate the quality of the confidence intervals found in problem 1. We assume to have a group of $n$ individuals with independent and identically distributed lifetimes. Let the hazard rate of the individuals be given by
+$$
+\lambda(t) = 0.027 \cdot t^{-0.4}.
+$$
+To find the CDF and PDF of the lifetime(s), $T$, of the individuals, we utilize that
+
+$$
+\begin{split}
+P(T > t) &:= S_{T}(t) = \exp\left(\int_0^t\lambda(s)ds\right) \\
+&= \exp\left(-\frac{0.027}{0.6}s^{0.6} \Big|_0^t \right) = \exp\left(-\frac{9}{200}t^{0.6}\right).
+\end{split}
+$$
+Then the CDF is given as,
+
+$$
+F_{T}(t) = 1- S_T(t) = 1 - \exp\left(-\frac{9}{200}t^{0.6}\right),
+$$
+and the PDF is given as
+$$
+f_{T}(t) = \frac{d}{dt}F_{T}(t) = 0.027t^{-0.4}\exp\left(-\frac{9}{200}t^{0.6}\right) = \lambda(t)\exp\left(-\frac{9}{200}t^{0.6}\right).
+$$
+The censoring times, $C$, are exponentially distributed with PDF
+$$
+f_C(c;\lambda) = \lambda e^{-\lambda c}.
+$$
+Consequently, their CDF is given as
+$$
+F_C(c; \lambda) = \int_0^c\lambda e^{-\lambda x}dx = 1-e^{-\lambda c},
+$$
+and 
+$$
+S_{C}(c;\lambda) = 1- F_C(c; \lambda) = e^{-\lambda c}.
+$$
+We denote the hazard rate of the censoring times by $\alpha(c)$ and find it through the following relation.
+
+$$
+\alpha(c) = -\frac{S'_C(c)}{S_C(c)} = \frac{-\lambda e^{-\lambda c}}{e^{-\lambda c}} = \lambda.
+$$
+A plot of $\lambda(t)$ and $\alpha(c)$ is given in figure 4.
+
+```{r, fig.cap="The hazard rates of the lifetimes and censoring times."}
+T.hazard <- function(t){
+  return(0.027*t^(-0.4))
+}
+
+lambda <- 0.02
+C.hazard <- function(c){ 
+  return(lambda)
+}
+
+ggplot(data.frame(t = seq(0, 10, by = 0.01)), aes(t)) +
+  geom_function(fun = T.hazard, aes(color = "T")) +
+  geom_function(fun = C.hazard, aes(color = "C")) + 
+  scale_color_manual(name = "", values = c("T" = "#e0474c", "C" = "#7ab8d6")) + ylab("Hazard rate")
+```
+
+
+
+The densities, $f_C(c)$ and $f_T(t)$ are plotted in figure 5.
+
+```{r, fig.cap="The PDFs of the lifetimes and censoring times."}
+f.T <- function(t){
+  return(T.hazard(t)*exp(-9/200 * t^(0.6)))
+}
+
+f.C <- function(c){ 
+  return(lambda*exp(-lambda*c))
+}
+
+ggplot(data.frame(t = seq(0, 500, by = 0.01)), aes(t)) +
+  geom_function(fun = f.T, aes(color = "T")) +
+  geom_function(fun = f.C, aes(color = "C")) + 
+  scale_color_manual(name = "", values = c("T" = "#e0474c", "C" = "#7ab8d6")) + ylab("Density")
+
+```
+
+
+## b)
+
+For individual number $i$, we define the right censored survival time
+
+$$
+\widetilde{T}_i = \min\{T_i, C_i\},
+$$
+which is what we observe. We also define the censoring indicator
+
+$$
+D_i = \begin{cases} 1,\quad \text{if }T \le C_i \\
+0, \quad \text{otherwise}.
+\end{cases}
+$$
+
+An R-function which simulated $\widetilde{T}$ and $D_i$ for $n$ individuals is given below. To simulate from $f_T$ and $f_C$, we use the probability integral transform method. 
+```{r}
+sim.C <- function(n, lambda){
+  u <- runif(n)
+  c <- -log(1-u)/lambda
+  return(c)
+}
+
+sim.T <- function(n){
+  u <- runif(n)
+  t <- (-200/9 * log(1 - u))^(5/3)
+  return(t)
+}
+
+sim.TD <- function(n, lambda, floor = TRUE){
+  t <- sim.T(n)
+  c <- sim.C(n, lambda)
+  t.tilde = pmin(t,c)
+  if(floor){
+    t.tilde = floor((t.tilde))
+  }
+  d <- (c < t)
+  
+  df <- data.frame(T.tilde = t.tilde, D = d)
+  if(max(t.tilde) < 150){
+    sim.TD(n, lambda)
+  } else{
+    return(df)
+  }
+}
+```
+
+
+```{r}
+n1 <- 13
+n2 <- 20
+
+sim1 <- sim.TD(n1, lambda)
+sim2 <- sim.TD(n2, lambda)
+
+tmax <- max(sim1,sim2)
+tmax
+max(sim2$T.tilde)
+
+df1 <- N.A.est(sim1, 0.05, 1, 0:tmax)
+df2 <- N.A.est(sim2, 0.05, 1, 0:tmax)
+ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
+  geom_stepconfint(aes(x = t, ymin=lower, ymax=upper),fill = "#e0474c", alpha = 0.2) +
+  geom_step(data = df2, aes(x = t, y = A.hat, color = "2")) +
+  geom_stepconfint(data = df2, aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
+  scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
+```
+After running the above code a dozen times, it is clear that event two groups follow the same distribution, the (estimated) integrated hazard rate can be quite different. This suggests the integrated hazard rates of group 1 and 2 may not differ.
+
+## c)
+
+
