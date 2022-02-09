@@ -242,6 +242,7 @@ sim.TD <- function(n, lambda, floor = TRUE){
 }
 ```
 
+## c)
 
 ```{r}
 n1 <- 13
@@ -264,6 +265,15 @@ ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) +
 ```
 After running the above code a dozen times, it is clear that event two groups follow the same distribution, the (estimated) integrated hazard rate can be quite different. This suggests the integrated hazard rates of group 1 and 2 may not differ.
 
-## c)
 
+## d)
+```{r}
+point.confint <- function(sim.df, t.point, alpha, conf.int.type){
+  df.A.hat <- N.A.est(sim.df, alpha, conf.int.type, 0:max(sim.df$T.tilde))
+  A.hat <- filter(df.A.hat, t == t.point)
+  return(c(A.hat$lower, A.hat$upper))
+}
+```
 
+## e)
+Now we want to assess the coverage probability of the different types of confidence intervals we have considered. Firstly, we find the analytic expression for the integrated hazard rate 
