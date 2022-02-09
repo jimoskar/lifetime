@@ -23,7 +23,8 @@ In the following we denote patients with negatively stained tumors as group 1 an
 ## a)
 First, a data frame containing the data presented above is constructed.
 ```{r}
-# T.tilde corresponds to the right censored lifetimes, while D indicates if the lifetime is right-censored.
+# T.tilde corresponds to the right censored lifetimes,
+# while D indicates if the lifetime is right-censored.
 # This notation is introduced in problem 2.
 
 df <- data.frame(
@@ -54,8 +55,41 @@ ggplot(data.frame(t = t, y1 = y1, y2 = y2)) + geom_step(aes(t, y1, color = "1"))
 From figure 1, we observe that group 2 has a much steeper trend than group 1.
 
 ## b)
-Below, a function computing the Nelson-Aalen estimator of the integrated hazard rate, $A(t)$, over the grid $t$ and a corresponding confidence interval with significance level $\alpha$ is given. We refer to the comments in the code for further documentation. 
+we want to compute the Nelson-Aalen estimator of the integrated hazard rate, $A(t)$, over the grid $t$ and a corresponding confidence interval with significance level $\alpha$ is given. The Nelson-Aalen estimator is defined as
+$$
+\hat{A}(t) = \sum_{T_j \le t}\frac{1}{Y(T_j)},
+$$
+where $Y(t)$ is the number of individuals at risk just before time $t$, and $T_j$ are the so-called jump times. To find confidence intervals, we use the following estimate of the variance:
+$$
+\hat{\sigma}^2(t)  = \sum_{T_j \le t}\frac{1}{Y(T_j)^2}.
+$$
+We implement two types of confidence intervals; a 'regular' one given by
+$$
+\hat{A}(t) \pm z_{1-\alpha/2}\cdot \hat{\sigma}(t),
+$$
+which we reference to as a type 1 confidence interval. Additionally, we implement a confidence interval based on the log-transformation, which is given as
+$$
+\hat{A}(t)\exp\left(\pm z_{1-\alpha/2}\cdot \hat{\sigma}(t)/\hat{A(t)}\right),
+$$
+and which we refer to as a type 2 confidence interval. The code which implements this is given below.
 ```{r}
+
+compute.A.hat <- function(y, t){
+  idx <- c(0,(diff(y, lag = 1) < 0)) > 0
+  jumps <- rep(Inf, length(y))
+  jumps[idx] <- y[idx] + 1
+  result <- cumsum(1/jumps)
+  return(result)
+}
+
+compute.sigma.hat <- function(y,t){
+  idx <- c(0,(diff(y, lag = 1) < 0)) > 0
+  jumps <- rep(Inf, length(y))
+  jumps[idx] <- y[idx] + 1
+  result <- sqrt(cumsum(1/jumps^2))
+  return(result)
+}
+
 N.A.est <- function(df, alpha, conf.int.type, t){
   
     # df: data frame with survival times
@@ -67,12 +101,8 @@ N.A.est <- function(df, alpha, conf.int.type, t){
   for(i in 1:length(t)){
     y[i] <- sum(df$T.tilde > t[i])
   }
-  A.hat <- cumsum(1/y)
-  # Fix infinite values:
-  A.hat[min(which(!is.finite(A.hat))):length(A.hat)] <- A.hat[min(which(!is.finite(A.hat))) - 1]
-  sigma.hat <- sqrt(cumsum(1/y^2))
-   # Fix infinite values:
-  sigma.hat[min(which(!is.finite(sigma.hat))):length(sigma.hat)] <- sigma.hat[min(which(!is.finite(sigma.hat))) - 1]
+  A.hat <- compute.A.hat(y,t)
+  sigma.hat <- compute.sigma.hat(y, t)
   z = qnorm(1 - alpha/2)
   upper <- lower <- NA
   if(conf.int.type == 1){
@@ -126,7 +156,7 @@ To find the CDF and PDF of the lifetime(s), $T$, of the individuals, we utilize 
 
 $$
 \begin{split}
-P(T > t) &:= S_{T}(t) = \exp\left(\int_0^t\lambda(s)ds\right) \\
+P(T > t) &:= S_{T}(t) = \exp\left(-\int_0^t\lambda(s)ds\right) \\
 &= \exp\left(-\frac{0.027}{0.6}s^{0.6} \Big|_0^t \right) = \exp\left(-\frac{9}{200}t^{0.6}\right).
 \end{split}
 $$
@@ -210,7 +240,7 @@ D_i = \begin{cases} 1,\quad \text{if }T \le C_i \\
 \end{cases}
 $$
 
-An R-function which simulated $\widetilde{T}$ and $D_i$ for $n$ individuals is given below. To simulate from $f_T$ and $f_C$, we use the probability integral transform method. 
+An R-function which simulates $\widetilde{T}$ and $D_i$ for $n$ individuals is given below. To simulate from $f_T$ and $f_C$, we use the probability integral transform method. 
 ```{r}
 sim.C <- function(n, lambda){
   u <- runif(n)
@@ -255,20 +285,20 @@ tmax <- max(sim1,sim2)
 tmax
 max(sim2$T.tilde)
 
-df1 <- N.A.est(sim1, 0.05, 1, 0:tmax)
-df2 <- N.A.est(sim2, 0.05, 1, 0:tmax)
+df1 <- N.A.est(sim1, 0.05, 2, 0:tmax)
+df2 <- N.A.est(sim2, 0.05, 2, 0:tmax)
 ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
   geom_stepconfint(aes(x = t, ymin=lower, ymax=upper),fill = "#e0474c", alpha = 0.2) +
   geom_step(data = df2, aes(x = t, y = A.hat, color = "2")) +
   geom_stepconfint(data = df2, aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
   scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
 ```
-After running the above code a dozen times, it is clear that event two groups follow the same distribution, the (estimated) integrated hazard rate can be quite different. This suggests the integrated hazard rates of group 1 and 2 may not differ.
+After running the above code a dozen times, it is seems that the confidence intervals will almost always overlap for the two groups, at lead for $t >50$. Since the confidence intervals of the 'real' groups nearly only overlap for $t > 200$, this suggests that the hazard rates do in fact differ.
 
 
 ## d)
 ```{r}
-point.confint <- function(sim.df, t.point, alpha, conf.int.type){
+point.conf.int <- function(sim.df, t.point, alpha, conf.int.type){
   df.A.hat <- N.A.est(sim.df, alpha, conf.int.type, 0:max(sim.df$T.tilde))
   A.hat <- filter(df.A.hat, t == t.point)
   return(c(A.hat$lower, A.hat$upper))
@@ -276,4 +306,41 @@ point.confint <- function(sim.df, t.point, alpha, conf.int.type){
 ```
 
 ## e)
-Now we want to assess the coverage probability of the different types of confidence intervals we have considered. Firstly, we find the analytic expression for the integrated hazard rate 
+Now we want to assess the coverage probability of the different types of confidence intervals we have considered. Firstly, we note that the analytic expression for the integrated hazard rate is
+
+
+$$
+A(t) = \int_0^t \lambda(s)ds = \frac{9}{200}t^{0.6}.
+$$
+For all combinations $n \in \{13, 20\}$, $t \in \{50, 100, 150\}$ and $\alpha \in \{0.01, 0.05, 0.10\}$ we want to estimate the coverage probability of the approximate confidence intervals. An R-function whhich does this for one such combination is given below.
+
+```{r}
+n <- 13
+t.point <- 50
+alpha <- 0.01
+
+A.exact <- function(t){return(9/200 * t^0.6)}
+
+est.coverage <- function(n, t.point, alpha, iter, conf.int.type){
+  result.vec = rep(NA, iter)
+  A <- A.exact(t.point)
+  print(A)
+  for(i in 1:iter){
+    sim.df <- sim.TD(n, lambda)
+    conf.int <- point.conf.int(sim.df, t.point, alpha, conf.int.type)
+    print(conf.int)
+    result.vec[i] = (A > conf.int[1] & A < conf.int[2])
+  }
+  return(sum(result.vec)/length(result.vec))
+}
+```
+
+```{r}
+n <- 13
+t.point <- 50
+alpha <- 0.01
+iter <- 10
+conf.int.type <- 1
+est.coverage(n, t.point, alpha, iter, conf.int.type)
+```
+
