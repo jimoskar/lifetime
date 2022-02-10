@@ -146,7 +146,7 @@ Nelson.Aalen <- function(df, alpha, conf.int.type){
 
 In the following, the Nelson-Aalen estimator is computed and plotted for the two groups. Figure 2 uses regular confidence intervals, while in figure 3, the confidence interval based on the log-transform is used.
 
-```{r, fig.cap="The Nelson-Aalen estimator of the integrated hazard rate with regular confidence intervals."}
+```{r, fig.cap="The Nelson-Aalen estimator of the integrated hazard rate with 95%-confidence intervals of type 1"}
 t <- seq(1, 200, by = 0.1)
 
 funcs.1 <- Nelson.Aalen(group1, 0.05, 1)
@@ -167,7 +167,7 @@ ggplot(df.1) + geom_step(aes(x = t, y = A.hat, color = "1")) +
 ```
 
 
-```{r, fig.cap="The Nelson-Aalen estimator of the integrated hazard rate with confidence intervals based on the log-transform."}
+```{r, fig.cap="The Nelson-Aalen estimator of the integrated hazard rate with 95%-confidence intervals of type 2"}
 t <- seq(1, 200, by = 0.1)
 
 funcs.1 <- Nelson.Aalen(group1, 0.05, 2)
@@ -317,7 +317,9 @@ sim.TD <- function(n, lambda, floor = TRUE){
 
 ## c)
 
-```{r}
+Below is code which simulated and plots the Nelson-Aalen estimator. Figure 6 and figure 7 shows two such simulations plotted with the two different types of confident intervals.
+
+```{r, fig.cap="Nelson-Aalen estimator for simulated data. We have used 95% cconfidence intervals of type 1"}
 n1 <- 13
 n2 <- 20
 
@@ -325,15 +327,14 @@ sim1 <- sim.TD(n1, lambda, floor = FALSE)
 sim2 <- sim.TD(n2, lambda, floor = FALSE)
 
 tmax <- max(sim1,sim2)
-sim1
 t <- seq(1, tmax + 10, by = 0.1)
 
-funcs.1 <- Nelson.Aalen(sim1, 0.05, 2)
+funcs.1 <- Nelson.Aalen(sim1, 0.05, 1)
 df.1 <- as_tibble(data.frame(t = t, A.hat = funcs.1$A.hat(t), 
                    lower = funcs.1$conf.int.lower(t), 
                   upper = funcs.1$conf.int.upper(t)))
 
-funcs.2 <- Nelson.Aalen(sim2, 0.05, 2)
+funcs.2 <- Nelson.Aalen(sim2, 0.05, 1)
 df.2 <- as_tibble(data.frame(t = t, A.hat = funcs.2$A.hat(t), 
                    lower = funcs.2$conf.int.lower(t), 
                    upper = funcs.2$conf.int.upper(t)))
@@ -341,10 +342,36 @@ df.2 <- as_tibble(data.frame(t = t, A.hat = funcs.2$A.hat(t),
 ggplot(df.1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
   geom_stepconfint(aes(x = t, ymin=lower, ymax=upper),fill = "#e0474c", alpha = 0.2) +
   geom_step(data = fortify(df.2), aes(x = t, y = A.hat, color = "2")) +
-  geom_stepconfint(data = fortify(df.2), aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
+  geom_stepconfint(data = fortify(df.2), aes(x = t, ymin=lower, ymax=upper), 
+                   fill = "#7ab8d6", alpha = 0.2) +
   scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
 ```
-After running the above code a dozen times, it is seems that the confidence intervals will almost always overlap for the two groups, at lead for $t >50$. Since the confidence intervals of the 'real' groups nearly only overlap for $t > 200$, this suggests that the hazard rates do in fact differ.
+```{r, fig.cap="Nelson-Aalen estimator for simulated data. We have used 95% cconfidence intervals of type 2"}
+sim3 <- sim.TD(n1, lambda, floor = FALSE)
+sim4 <- sim.TD(n2, lambda, floor = FALSE)
+
+tmax <- max(sim3,sim4)
+t <- seq(1, tmax + 10, by = 0.1)
+
+funcs.3 <- Nelson.Aalen(sim3, 0.05, 2)
+df.3 <- as_tibble(data.frame(t = t, A.hat = funcs.1$A.hat(t), 
+                   lower = funcs.1$conf.int.lower(t), 
+                  upper = funcs.1$conf.int.upper(t)))
+
+funcs.4 <- Nelson.Aalen(sim4, 0.05, 2)
+df.4 <- as_tibble(data.frame(t = t, A.hat = funcs.2$A.hat(t), 
+                   lower = funcs.2$conf.int.lower(t), 
+                   upper = funcs.2$conf.int.upper(t)))
+
+ggplot(df.1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
+  geom_stepconfint(aes(x = t, ymin=lower, ymax=upper),fill = "#e0474c", alpha = 0.2) +
+  geom_step(data = fortify(df.2), aes(x = t, y = A.hat, color = "2")) +
+  geom_stepconfint(data = fortify(df.2), aes(x = t, ymin=lower, ymax=upper), 
+                   fill = "#7ab8d6", alpha = 0.2) +
+  scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
+```
+
+After running the above code a dozen times, it is seems that the confidence intervals will usually overlap for the two groups, at least for $t >50$. Since the confidence 95%-confidence intervals of the 'real' groups never overlap, this suggests that the hazard rates do in fact differ.
 
 
 ## d)
@@ -362,13 +389,9 @@ Now we want to assess the coverage probability of the different types of confide
 $$
 A(t) = \int_0^t \lambda(s)ds = \frac{9}{200}t^{0.6}.
 $$
-For all combinations $n \in \{13, 20\}$, $t \in \{50, 100, 150\}$ and $\alpha \in \{0.01, 0.05, 0.10\}$ we want to estimate the coverage probability of the approximate confidence intervals. An R-function whhich does this for one such combination is given below.
+For all combinations $n \in \{13, 20\}$, $t \in \{50, 100, 150\}$ and $\alpha \in \{0.01, 0.05, 0.10\}$ we want to estimate the coverage probability of the approximate confidence intervals. An R-function which does this for one such combination is given below.
 
 ```{r}
-n <- 13
-t.point <- 50
-alpha <- 0.01
-
 A.exact <- function(t){return(9/200 * t^0.6)}
 
 est.coverage <- function(n, t.point, alpha, iter, conf.int.type){
@@ -388,17 +411,52 @@ est.coverage <- function(n, t.point, alpha, iter, conf.int.type){
 ```{r}
 n <- 13
 t.point <- 50
-alpha <- 0.01
-iter <- 100
-conf.int.type <- 1
+alpha <- 0.10
+iter <- 1000
+conf.int.type <- 2
 est.coverage(n, t.point, alpha, iter, conf.int.type)
 ```
 
+We first do the simulation for confidence intervals of type 1:
 ```{r}
 n <- c(13, 20)
 t.points <- c(50, 100, 150)
 alpha <- c(0.01, 0.05, 0.10)
 
-expand.grid(n, t.points, alpha)
+params <- expand.grid(n, t.points, alpha)
+result.1 <- cbind(params, rep(NA, 18))
+colnames(result.1) <- c("n", "t.point", "alpha", "cov.prob")
+iter <- 100
+conf.int.type <- 1
+
+for(i in 1:nrow(params)){
+  #print(result[i, ])
+  n <- result.1$n[i]
+  alpha <- result.1$alpha[i]
+  t.point <- result.1$t.point[i]
+  alpha <- result.1$alpha[i]
+  result.1$cov.prob[i] <- est.coverage(n, t.point, alpha, iter, conf.int.type)
+}
+
+result.1
 ```
+Then we consider confidence intervals of type 2:
+```{r}
+result.2 <- cbind(params, rep(NA, 18))
+colnames(result.2) <- c("n", "t.point", "alpha", "cov.prob")
+iter <- 100
+conf.int.type <- 2
+
+for(i in 1:nrow(params)){
+  #print(result[i, ])
+  n <- result.2$n[i]
+  alpha <- result.2$alpha[i]
+  t.point <- result.2$t.point[i]
+  alpha <- result.2$alpha[i]
+  result.2$cov.prob[i] <- est.coverage(n, t.point, alpha, iter, conf.int.type)
+}
+
+result.2
+```
+
 
