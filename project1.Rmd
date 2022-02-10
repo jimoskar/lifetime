@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(ggplot2)
 library(utile.visuals)
+library(dplyr)
 ```
 In this exercise we consider results from an old investigation to evaluate a histochemical marker that discriminates between primary breast cancer that has metastasized and that which has not. The marker under study is denoted HPA. Each tumor was treated with this marker and hence classified as either positively or negatively stained. The data which will be used is given below. The survival times of each woman is given in months and classified according to whether their tumor was negatively or positively stained. Censored survival times are labeled with an asterisk (*).
 
@@ -73,6 +74,8 @@ $$
 $$
 and which we refer to as a type 2 confidence interval. The code which implements this is given below.
 ```{r}
+#library(survival)
+
 
 compute.A.hat <- function(y, t){
   idx <- c(0,(diff(y, lag = 1) < 0)) > 0
@@ -90,19 +93,32 @@ compute.sigma.hat <- function(y,t){
   return(result)
 }
 
-N.A.est <- function(df, alpha, conf.int.type, t){
+Nelson.Aalen <- function(df, alpha, conf.int.type){
   
     # df: data frame with survival times
     # alpha: significance level of conf.int
     # conf.int.type: type of confidence interval, (1) regular or (2) log-type.
     # t: time grid
   
-  y <- rep(0, length(t))
-  for(i in 1:length(t)){
-    y[i] <- sum(df$T.tilde > t[i])
+  times <- df$T.tilde
+  n <- length(times) # Number of individuals
+  status <- !(df$D) # True if not censored
+  m <- sum(status) # Number of uncensored times
+  event.times <- sort(times[status]) # Event times
+  #print(event.times)
+  y <- rep(n, m)
+  for(i in 1:m){
+    y[i] <- sum(times >= event.times[i])
   }
-  A.hat <- compute.A.hat(y,t)
-  sigma.hat <- compute.sigma.hat(y, t)
+  # comp <- basehaz(coxph(Surv(T.tilde,D)~1,data=df))
+  # print("heyo")
+  # print(comp)
+  #print(y)
+  A.hat <- rep(0, m + 1)
+  A.hat[2:(m + 1)] <- cumsum(1/y)
+  #print(A.hat)
+  sigma.hat <- rep(0, m + 1)
+  sigma.hat[2:(m + 1)] = cumsum(1/y^2)
   z = qnorm(1 - alpha/2)
   upper <- lower <- NA
   if(conf.int.type == 1){
@@ -110,38 +126,65 @@ N.A.est <- function(df, alpha, conf.int.type, t){
     lower <- A.hat - z*sigma.hat
   }
   else if(conf.int.type == 2){
-    upper <- A.hat * exp(z*sigma.hat/A.hat)
-    lower <- A.hat * exp(-z*sigma.hat/A.hat)
+    exponent <- z*sigma.hat/A.hat
+    exponent[is.na(exponent)] <- 0
+    upper <- A.hat * exp(exponent)
+    lower <- A.hat * exp(-exponent)
   }
   else{
     stop("Invalid conf.int.type")
   }
-  return(data.frame(A.hat = A.hat, upper = upper, lower = lower, t = t))
+  
+  if(length(event.times) < 1){ # No event times (for simulation)
+    event.times <- 0
+    A.hat <- lower <- upper <- c(0,0)}
+  return(list(A.hat = stepfun(event.times, A.hat),
+              conf.int.lower = stepfun(event.times, lower),
+              conf.int.upper = stepfun(event.times, upper)))
 }
 ```
 
 In the following, the Nelson-Aalen estimator is computed and plotted for the two groups. Figure 2 uses regular confidence intervals, while in figure 3, the confidence interval based on the log-transform is used.
 
 ```{r, fig.cap="The Nelson-Aalen estimator of the integrated hazard rate with regular confidence intervals."}
-df1 <- N.A.est(group1, 0.05, 1, t)
-df2 <- N.A.est(group2, 0.05, 1, t)
-ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
+t <- seq(1, 200, by = 0.1)
+
+funcs.1 <- Nelson.Aalen(group1, 0.05, 1)
+df.1 <- as_tibble(data.frame(t = t, A.hat = funcs.1$A.hat(t), 
+                   lower = funcs.1$conf.int.lower(t), 
+                  upper = funcs.1$conf.int.upper(t)))
+
+funcs.2 <- Nelson.Aalen(group2, 0.05, 1)
+df.2 <- as_tibble(data.frame(t = t, A.hat = funcs.2$A.hat(t), 
+                   lower = funcs.2$conf.int.lower(t), 
+                   upper = funcs.2$conf.int.upper(t)))
+
+ggplot(df.1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
   geom_stepconfint(aes(x = t, ymin=lower, ymax=upper),fill = "#e0474c", alpha = 0.2) +
-  geom_step(data = df2, aes(x = t, y = A.hat, color = "2")) +
-  geom_stepconfint(data = df2, aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
+  geom_step(data = fortify(df.2), aes(x = t, y = A.hat, color = "2")) +
+  geom_stepconfint(data = fortify(df.2), aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
   scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
 ```
 
 
 ```{r, fig.cap="The Nelson-Aalen estimator of the integrated hazard rate with confidence intervals based on the log-transform."}
-df1 <- N.A.est(group1, 0.05, 2, t)
-df2 <- N.A.est(group2, 0.05, 2, t)
-ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
+t <- seq(1, 200, by = 0.1)
+
+funcs.1 <- Nelson.Aalen(group1, 0.05, 2)
+df.1 <- as_tibble(data.frame(t = t, A.hat = funcs.1$A.hat(t), 
+                   lower = funcs.1$conf.int.lower(t), 
+                  upper = funcs.1$conf.int.upper(t)))
+
+funcs.2 <- Nelson.Aalen(group2, 0.05, 2)
+df.2 <- as_tibble(data.frame(t = t, A.hat = funcs.2$A.hat(t), 
+                   lower = funcs.2$conf.int.lower(t), 
+                   upper = funcs.2$conf.int.upper(t)))
+
+ggplot(df.1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
   geom_stepconfint(aes(x = t, ymin=lower, ymax=upper),fill = "#e0474c", alpha = 0.2) +
-  geom_step(data = df2, aes(x = t, y = A.hat, color = "2")) +
-  geom_stepconfint(data = df2, aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
+  geom_step(data = fortify(df.2), aes(x = t, y = A.hat, color = "2")) +
+  geom_stepconfint(data = fortify(df.2), aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
   scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
-  
 ```
 
 From figure 2 and 3, we observe that $\hat{A}(t)$ grows much faster for group 2 than for group 1.
@@ -278,19 +321,27 @@ sim.TD <- function(n, lambda, floor = TRUE){
 n1 <- 13
 n2 <- 20
 
-sim1 <- sim.TD(n1, lambda)
-sim2 <- sim.TD(n2, lambda)
+sim1 <- sim.TD(n1, lambda, floor = FALSE)
+sim2 <- sim.TD(n2, lambda, floor = FALSE)
 
 tmax <- max(sim1,sim2)
-tmax
-max(sim2$T.tilde)
+sim1
+t <- seq(1, tmax + 10, by = 0.1)
 
-df1 <- N.A.est(sim1, 0.05, 2, 0:tmax)
-df2 <- N.A.est(sim2, 0.05, 2, 0:tmax)
-ggplot(df1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
+funcs.1 <- Nelson.Aalen(sim1, 0.05, 2)
+df.1 <- as_tibble(data.frame(t = t, A.hat = funcs.1$A.hat(t), 
+                   lower = funcs.1$conf.int.lower(t), 
+                  upper = funcs.1$conf.int.upper(t)))
+
+funcs.2 <- Nelson.Aalen(sim2, 0.05, 2)
+df.2 <- as_tibble(data.frame(t = t, A.hat = funcs.2$A.hat(t), 
+                   lower = funcs.2$conf.int.lower(t), 
+                   upper = funcs.2$conf.int.upper(t)))
+
+ggplot(df.1) + geom_step(aes(x = t, y = A.hat, color = "1")) + 
   geom_stepconfint(aes(x = t, ymin=lower, ymax=upper),fill = "#e0474c", alpha = 0.2) +
-  geom_step(data = df2, aes(x = t, y = A.hat, color = "2")) +
-  geom_stepconfint(data = df2, aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
+  geom_step(data = fortify(df.2), aes(x = t, y = A.hat, color = "2")) +
+  geom_stepconfint(data = fortify(df.2), aes(x = t, ymin=lower, ymax=upper), fill = "#7ab8d6", alpha = 0.2) +
   scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
 ```
 After running the above code a dozen times, it is seems that the confidence intervals will almost always overlap for the two groups, at lead for $t >50$. Since the confidence intervals of the 'real' groups nearly only overlap for $t > 200$, this suggests that the hazard rates do in fact differ.
@@ -299,9 +350,8 @@ After running the above code a dozen times, it is seems that the confidence inte
 ## d)
 ```{r}
 point.conf.int <- function(sim.df, t.point, alpha, conf.int.type){
-  df.A.hat <- N.A.est(sim.df, alpha, conf.int.type, 0:max(sim.df$T.tilde))
-  A.hat <- filter(df.A.hat, t == t.point)
-  return(c(A.hat$lower, A.hat$upper))
+  funcs <- Nelson.Aalen(sim.df, alpha, conf.int.type)
+  return(c(funcs$conf.int.lower(t.point),funcs$conf.int.upper(t.point)))
 }
 ```
 
@@ -328,7 +378,7 @@ est.coverage <- function(n, t.point, alpha, iter, conf.int.type){
   for(i in 1:iter){
     sim.df <- sim.TD(n, lambda)
     conf.int <- point.conf.int(sim.df, t.point, alpha, conf.int.type)
-    print(conf.int)
+    #print(conf.int)
     result.vec[i] = (A > conf.int[1] & A < conf.int[2])
   }
   return(sum(result.vec)/length(result.vec))
@@ -339,8 +389,16 @@ est.coverage <- function(n, t.point, alpha, iter, conf.int.type){
 n <- 13
 t.point <- 50
 alpha <- 0.01
-iter <- 10
+iter <- 100
 conf.int.type <- 1
 est.coverage(n, t.point, alpha, iter, conf.int.type)
+```
+
+```{r}
+n <- c(13, 20)
+t.points <- c(50, 100, 150)
+alpha <- c(0.01, 0.05, 0.10)
+
+expand.grid(n, t.points, alpha)
 ```
 
