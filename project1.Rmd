@@ -48,19 +48,20 @@ for(i in 1:length(t)){
   y1[i] <- sum(group1$T.tilde > t[i])
   y2[i] <- sum(group2$T.tilde > t[i])
 }
-ggplot(data.frame(t = t, y1 = y1, y2 = y2)) + geom_step(aes(t, y1, color = "1")) + geom_step(aes(t, y2, color = "2")) +
+ggplot(data.frame(t = t, y1 = y1, y2 = y2)) + geom_step(aes(t, y1, color = "1")) + 
+  geom_step(aes(t, y2, color = "2")) +
   ylab("Number of Individuals") + xlab("t (study time)") +
   scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
 ```
 
-From figure 1, we observe that group 2 has a much steeper trend than group 1.
+From figure 1, we observe that group 2 has a much steeper trend/slope than group 1 for approximately $t < 25$ and $t>100$.
 
 ## b)
 We want to compute the Nelson-Aalen estimator of the integrated hazard rate, $A(t)$ and a corresponding confidence interval with significance level $\alpha$ is given. The Nelson-Aalen estimator is defined as
 $$
 \hat{A}(t) = \sum_{T_j \le t}\frac{1}{Y(T_j)},
 $$
-where $Y(t)$ is the number of individuals at risk just before time $t$, and $T_j$ are the so-called jump times. To find confidence intervals, we use the following estimate of the variance:
+where $Y(t)$ is the number of individuals at risk just before time $t$, and $T_j$ are the so-called jump times, which are the time point at which a non-censored survival time ends. To find confidence intervals, we use the following estimate of the variance.
 $$
 \hat{\sigma}^2(t)  = \sum_{T_j \le t}\frac{1}{Y(T_j)^2}.
 $$
@@ -68,7 +69,7 @@ We implement two types of confidence intervals; a 'regular' one given by
 $$
 \hat{A}(t) \pm z_{1-\alpha/2}\cdot \hat{\sigma}(t),
 $$
-which we reference to as a type 1 confidence interval. Additionally, we implement a confidence interval based on the log-transformation, which is given as
+which we refer to as a type 1 confidence interval. Additionally, we implement a confidence interval based on the log-transformation, which is given as
 $$
 \hat{A}(t)\exp\left(\pm z_{1-\alpha/2}\cdot \hat{\sigma}(t)/\hat{A(t)}\right),
 $$
@@ -118,7 +119,7 @@ Nelson.Aalen <- function(df, alpha, conf.int.type){
 }
 ```
 
-In the following, the Nelson-Aalen estimator is computed and plotted for the two groups. Figure 2 uses regular confidence intervals, while in figure 3, the confidence interval based on the log-transform is used.
+In the following, the Nelson-Aalen estimator is computed and plotted for the two groups. Figure 2 uses confidence intervals of type 1, while in figure 3, confidence intervals of type 2 are used.
 
 ```{r, fig.cap="The Nelson-Aalen estimator of the integrated hazard rate with 95%-confidence intervals of type 1."}
 t <- seq(1, 200, by = 0.1)
@@ -161,7 +162,7 @@ ggplot(df.1) + geom_step(aes(x = t, y = A.hat, color = "1")) +
   scale_color_manual(name = "Group", values = c("1" = "#e0474c", "2" = "#7ab8d6"))
 ```
 
-From figure 2 and 3, we observe that $\hat{A}(t)$ has a larger slope for group 2 than for group 1, at lead for $t < 75$. From this, one could infer that the hazard is greater for group 2 than for group 1 on this interval in time. It is thus tempting to conclude that the hazard rates are in fact different. However, the confidence intervals of the groups do have so overlap, so we shall study this further.
+From figure 2 and 3, we observe that $\hat{A}(t)$ has a larger slope for group 2 than for group 1, at least for $t < 70$. From this, one could infer that the hazard is greater for group 2 than for group 1 on this interval in time. It is thus tempting to conclude that the hazard rates are in fact different. However, the confidence intervals of the groups do have some overlap, so we shall study this further.
 
 # Problem 2
 ## a)
@@ -415,7 +416,7 @@ for(i in 1:nrow(params)){
 result.1
 ```
 Then we consider confidence intervals of type 2:
-```{r, cahce = TRUE}
+```{r, cache = TRUE}
 result.2 <- cbind(params, rep(NA, 18))
 colnames(result.2) <- c("n", "t.point", "alpha", "cov.prob")
 iter <- 100000
@@ -431,5 +432,18 @@ for(i in 1:nrow(params)){
 
 result.2
 ```
-
+The above table shows that the confidence intervals of type 2 (i.e. based on the log-transform) have a higher coverage probability than confidence intervals of type 1. We also observe that the confidence intervals perform worse for higher times and for higher values of $\alpha$ (obviously). We compute the average coverage probability for $n = 13$ and $n = 20$ for confidence intervals of type 1:
+```{r}
+filter(result.1) %>% group_by(n) %>% summarise(avg.cov.prob = mean(cov.prob))
+```
+We observe that the coverage probability is larger for $n = 20$. This makes sense, since a larger number of individuals should lead to less uncertainty. However, we do not obserce the same for confidence intervals of type 2:
+```{r}
+filter(result.2) %>% group_by(n) %>% summarise(avg.cov.prob = mean(cov.prob))
+```
+The average coverage probability over all combinations for $\alpha =0.05$ for the two types is computed below:
+```{r}
+c("type.1.avg" = mean(filter(result.1, alpha==0.05)$cov.prob), 
+  "type.2.avg" = mean(filter(result.2, alpha ==0.05)$cov.prob))
+```
+We conclude that confidence intervals of type 2 are preferable.
 
