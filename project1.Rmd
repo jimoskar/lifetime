@@ -383,7 +383,7 @@ est.coverage <- function(n, t.point, alpha, iter, conf.int.type){
 }
 ```
 
-```{r}
+```{r, eval = FALSE}
 n <- 13
 t.point <- 50
 alpha <- 0.10
@@ -418,7 +418,7 @@ Then we consider confidence intervals of type 2:
 ```{r, cahce = TRUE}
 result.2 <- cbind(params, rep(NA, 18))
 colnames(result.2) <- c("n", "t.point", "alpha", "cov.prob")
-iter <- 10
+iter <- 100000
 conf.int.type <- 2
 
 for(i in 1:nrow(params)){
