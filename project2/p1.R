@@ -7,7 +7,10 @@ library(ggplot2)
 tire <- read.csv("~/Github/lifetime/project2/tire.txt", sep="")
 
 # Fit the model 1
+covariates1 <- c("Age","Wedge","Inter", "EB2B", "Peel", "Carbon", "WxP")
 cox.reg1 <- coxph(Surv(Survival, Censor) ~ ., data = tire)
+
+cox.reg1$coefficients
 
 # Create table for latex
 s <- summary(cox.reg1)
@@ -28,7 +31,8 @@ xtable(sum2$coefficients[, c(1,3,4,5)], digits = 4)
 beta.hat1 <- cox.reg1$coefficients
 beta.hat2 <- cox.reg2$coefficients
 
-r1 <- exp(as.matrix(tire[, c(1, 2, 3, 4, 5, 6, 7)]) %*% beta.hat1)
+r1 <- exp(as.matrix(tire[, c("Age","Wedge","Inter", "EB2B", "Peel", "Carbon", "WxP")]) %*%
+            beta.hat1)
 r2 <- exp(as.matrix(tire[, c(2, 3, 5, 7)]) %*% beta.hat2)
 
 log.r.df <- data.frame(log.r1 = log(r1), log.r2 = log(r2), x = 1:34)
@@ -39,8 +43,9 @@ ggplot(log.r.df, aes(x = x)) + geom_point(aes(y = log.r1, color = "model 1")) +
 ## b) ----
 
 # The Breslow estimator
-breslow <- function(t, x.mat, beta.vec){
-  T.vec <- tire[tire$Censor == 1]$Survival # event times
+breslow <- function(df, covariates, beta.vec){
+  x.mat <- df[, covariates]
+  T.vec <- sort(df[df$Censor == 1, ]$Survival) # event times
   A.vec <- rep(NA, length(T.vec))
   A.vec[0] <- 
   for(i in 1:length(T.vec)){
@@ -54,13 +59,17 @@ breslow <- function(t, x.mat, beta.vec){
     denom <- 0
     for(j in nrow(x.mat)){
       if(tire$Survival <= t){
-        denom <-  denom + exp(t(beta.vec) %*% x.mat[j, ])
+        denom <-  denom + exp(t(beta.vec) %*% unlist(x.mat[j, ]))
       }
     }
     A.val <- A.val + 1/denom
     A.vec[i] <- A.val
   }
+  return(stepfun(T.vec, A.val))
 }
 
 
+beta1 <- cox.reg1$coefficients
+breslow(tire, covariates1, beta1)
+options(error = recover)
 
