@@ -7,10 +7,7 @@ library(ggplot2)
 tire <- read.csv("~/Github/lifetime/project2/tire.txt", sep="")
 
 # Fit the model 1
-covariates1 <- c("Age","Wedge","Inter", "EB2B", "Peel", "Carbon", "WxP")
 cox.reg1 <- coxph(Surv(Survival, Censor) ~ ., data = tire)
-
-cox.reg1$coefficients
 
 # Create table for latex
 s <- summary(cox.reg1)
@@ -31,9 +28,11 @@ xtable(sum2$coefficients[, c(1,3,4,5)], digits = 4)
 beta.hat1 <- cox.reg1$coefficients
 beta.hat2 <- cox.reg2$coefficients
 
-r1 <- exp(as.matrix(tire[, c("Age","Wedge","Inter", "EB2B", "Peel", "Carbon", "WxP")]) %*%
+covariates1 <- c("Age","Wedge","Inter", "EB2B", "Peel", "Carbon", "WxP")
+covariates2 <- c("Wedge","Inter", "Peel", "WxP")
+r1 <- exp(as.matrix(tire[, covariates1]) %*%
             beta.hat1)
-r2 <- exp(as.matrix(tire[, c(2, 3, 5, 7)]) %*% beta.hat2)
+r2 <- exp(as.matrix(tire[, covariates2]) %*% beta.hat2)
 
 log.r.df <- data.frame(log.r1 = log(r1), log.r2 = log(r2), x = 1:34)
 ggplot(log.r.df, aes(x = x)) + geom_point(aes(y = log.r1, color = "model 1")) + 
@@ -44,10 +43,13 @@ ggplot(log.r.df, aes(x = x)) + geom_point(aes(y = log.r1, color = "model 1")) +
 
 # The Breslow estimator
 breslow <- function(df, covariates, beta.vec){
-  x.mat <- df[, covariates]
-  T.vec <- sort(df[df$Censor == 1, ]$Survival) # event times
-  A.vec <- rep(NA, length(T.vec))
-  A.vec[0] <- 
+  x.mat <- df[, covariates] # Matrix for covariates
+  r.vec <- exp(as.matrix(x.mat) %*% beta.vec) # Vector of rel. risk function estimates
+  max.r <- max(r.vec)
+  r.vec.norm <- r.vec/max.r # Normalize the rel. risk functions to avoid numerical problems
+  T.vec <- sort(df[df$Censor == 1, ]$Survival) # Event times
+  A.vec <- rep(NA, length(T.vec)) # Estimated integrated baseline hazard
+  
   for(i in 1:length(T.vec)){
     A.val <- NA
     if(i == 1){
@@ -56,20 +58,50 @@ breslow <- function(df, covariates, beta.vec){
       A.val <- A.vec[i - 1]
     }
     t <- T.vec[i]
-    denom <- 0
-    for(j in nrow(x.mat)){
-      if(tire$Survival <= t){
-        denom <-  denom + exp(t(beta.vec) %*% unlist(x.mat[j, ]))
-      }
-    }
+    idx <- tire$Survival <= t
+    denom <- sum(r.vec.norm[idx])
     A.val <- A.val + 1/denom
     A.vec[i] <- A.val
   }
-  return(stepfun(T.vec, A.val))
+  
+  A.vec <- A.vec/max.r # Fix scale
+  return(data.frame(t = T.vec, a = A.vec))
 }
 
+# Calculate Breslow estimator for model 1 and model 2 and plot them
+b1 <- breslow(tire, covariates1, beta.hat1)
+b2 <- breslow(tire, covariates2, beta.hat2)
+ggplot(b1) + geom_step(aes(x = t, y = a, color = "model 1")) + 
+  geom_step(data = b2, aes(x = t, y = a, color = "model 2")) +
+  scale_color_manual(name = " ", values = c("model 1" = "blue", "model 2" = "red")) + 
+  scale_y_continuous(trans = "log") + xlab("Study time, t") + 
+  ylab(expression(log(hat(A)[0](t)))) + theme_minimal()
 
-beta1 <- cox.reg1$coefficients
-breslow(tire, covariates1, beta1)
-options(error = recover)
+plot(b, ylim = c(0,max(environment(b)$y)))
+
+## c) Model selection ----
+
+# Strategy: Remove covariate with lowest p-value. Stop when all covariates have p < 0.05.
+summary(cox.reg1) # Remove Age
+
+mod1 <- coxph(Surv(Survival, Censor) ~ Wedge + Inter + EB2B + Peel + Carbon + WxP, data = tire)
+summary(mod1) # Remove E2B2
+
+mod2 <- coxph(Surv(Survival, Censor) ~ Wedge + Inter +  Peel + Carbon + WxP, data = tire)
+summary(mod2) # Remove Carbon
+
+mod3 <- coxph(Surv(Survival, Censor) ~ Wedge + Inter +  Peel + WxP, data = tire)
+summary(mod3) # All p < 0.05
+
+
+covariates.mod2 <- c("Wedge","Inter", "Peel", "Carbon", "WxP")
+beta.mod2 <- mod2$coefficients
+r.mod2 <- exp(as.matrix(tire[, covariates.mod2]) %*%
+            beta.mod2)
+r2 <- exp(as.matrix(tire[, covariates2]) %*% beta.hat2)
+
+log.r.df <- data.frame(log.r1 = log(r1), log.r.mod2 = log(r.mod2), x = 1:34)
+ggplot(log.r.df, aes(x = x)) + geom_point(aes(y = log.r1, color = "model 1")) + 
+  geom_point(aes(y = log.r.mod2, color = "model 2")) + xlab("i") + ylab("log(r)") + 
+  scale_color_manual(name = " ", values = c("model 1" = "blue", "model 2" = "red")) + theme_minimal()
 
