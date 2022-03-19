@@ -77,7 +77,7 @@ ggplot(b1) + geom_step(aes(x = t, y = a, color = "model 1")) +
   scale_y_continuous(trans = "log") + xlab("Study time, t") + 
   ylab(expression(log(hat(A)[0](t)))) + theme_minimal()
 
-plot(b, ylim = c(0,max(environment(b)$y)))
+plot(b1, ylim = c(0,max(environment(b)$y)))
 
 ## c) Model selection ----
 
@@ -85,10 +85,15 @@ plot(b, ylim = c(0,max(environment(b)$y)))
 summary(cox.reg1) # Remove Age
 
 mod1 <- coxph(Surv(Survival, Censor) ~ Wedge + Inter + EB2B + Peel + Carbon + WxP, data = tire)
-summary(mod1) # Remove E2B2
+s <- summary(mod1) # Remove E2B2
+x <- s$coefficients[, c(1,3,4,5)]
+xtable(x, digits = 4)
+
 
 mod2 <- coxph(Surv(Survival, Censor) ~ Wedge + Inter +  Peel + Carbon + WxP, data = tire)
-summary(mod2) # Remove Carbon
+s <- summary(mod2) # Remove Carbon
+x <- s$coefficients[, c(1,3,4,5)]
+xtable(x, digits = 4)
 
 mod3 <- coxph(Surv(Survival, Censor) ~ Wedge + Inter +  Peel + WxP, data = tire)
 summary(mod3) # All p < 0.05
