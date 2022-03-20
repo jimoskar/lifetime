@@ -71,18 +71,21 @@ simulate.df <- function(df, model){
 
 ## b) ----
 
-head(colnames(tire), -2)
 # Function which performs the elimination procedure
 elim <- function(df){
   y <- "Surv(Survival, Censor)"
-  covariates <- head(colnames(df), -2)
+  covariates <- c("Age", "Wedge","Inter", "EB2B", "Peel", "Carbon", "WxP")
   p.above <- TRUE
   while(p.above){
-    formula <- as.formula(paste(y, paste(covariates, collapse=" + "), sep=" ~ ")) # Create formula
+    formula <- as.formula(paste(y, paste(covariates, collapse=" + "), 
+                                sep=" ~ ")) # Create formula
     model <- coxph(formula, data = df)
     s <- summary(model)
     p.vals <- s$coefficients[,5]
-    if(sum(p.vals > 0.05) == 0){
+    if(sum(is.na(p.vals)) > 0){ # Remove covariates with NaN-values
+      remove <- which(is.na(p.vals))
+      covariates <- covariates[-remove]
+    } else if(sum(p.vals > 0.05) == 0 || length(covariates) == 1){ # Stop elim
       p.above = FALSE
     } else{
       remove <- which(p.vals == max(p.vals))
@@ -92,7 +95,7 @@ elim <- function(df){
   return(model)
 }
 
-sim <-  simulate.df(tire, cox.reg)
+sim <-  simulate.df(tire, cox.reg2)
 sim.df <- sim$sim.df
 mod.elim <- elim(sim.df)
 
@@ -104,7 +107,8 @@ r.true <- exp(as.matrix(tire[, names(cox.reg$coefficients)]) %*% cox.reg$coeffic
 log.r.df <- data.frame(log.r.est = log(r.est), log.r.true = log(r.true), x = 1:34)
 ggplot(log.r.df, aes(x = x)) + geom_point(aes(y = log.r.est, color = "Estimated r")) + 
   geom_point(aes(y = log.r.true, color = "True r")) + xlab("i") + ylab("log(r)") + 
-  scale_color_manual(name = " ", values = c("Estimated r" = "blue", "True r" = "red")) + theme_minimal()
+  scale_color_manual(name = " ", values = c("Estimated r" = "blue", "True r" = "red")) + 
+  theme_minimal()
 
 # Compare estimated integrated hazard rate with true integrated hazard rate
 A0.hat <- breslow(sim.df, names(mod.elim$coefficients), mod.elim$coefficients)
@@ -116,11 +120,48 @@ A.true <- function(x, idx, b.vec, k){
   return(b.vec[idx]/k * x^k)
 }
 
+# Plot for one of the cases
+
 ggplot(A.hat.df, aes(x = t)) + geom_step(aes(y = a.hat2, color = "A.hat")) +
  geom_function(fun = A.true, args = list(idx = 2, b.vec = sim$b.vec, k = sim$k), aes(color ="A")) +
   scale_color_manual(name = " ", values = c("A.hat" = "blue", "A" = "red"), 
                      labels = expression(hat(A)(t), A(t))) + 
   coord_cartesian(ylim = c(0, 1.2)) + xlab("Study time, t") + ylab(" ") + theme_minimal()
   
+## c) ----
+repeat.sim <- function(num.iter, plot=FALSE){
+  all.covariates <- c("Age", "Wedge","Inter", "EB2B", "Peel", "Carbon", "WxP")
+  counts <- rep(0, 7)
+  p <- ggplot(environment = environment())
+  for(i in 1:num.iter){
+    sim.df <- simulate.df(tire, cox.reg)$sim.df
+    mod <- elim(sim.df)
+    mod.covariates <- names(mod$coefficients)
+    included <- all.covariates %in% mod.covariates
+    counts[included] <- counts[included] + 1
+    if(plot){
+      b <- breslow(sim.df, mod.covariates, mod$coefficients)
+      p <- p +  geom_step(data = data.frame(x = b$t, y = b$a),
+                          aes(x = x, y = y), color = "blue", alpha = 0.5)
+    }
+  }
+  return(list(p = p, counts = counts))
+}
 
+# Run simulations
+num.iter <- 1000
+c <- repeat.sim(num.iter, plot = TRUE)
 
+# Plot proportions
+ggplot(data= data.frame(prop = c$counts/num.iter, 
+                        x = c("Age", "Wedge","Inter", "EB2B", "Peel", "Carbon", "WxP")), 
+       aes(x=x, y=prop)) + geom_bar(stat="identity") + xlab(" ") + ylab("Proportion") + 
+  theme_minimal()
+
+# Plot baseline hazard rates
+A0 <- function(x, b, k){
+  return(b/k * x^k)
+}
+c$p + geom_function(fun = A0, args = list(b = 4e10, k = 15), color = "red", size = 1) + 
+  scale_y_continuous(trans = "log") + ylab("log of integrated baseline hazard rates") +
+  xlab("Study time, t") + theme_minimal()
