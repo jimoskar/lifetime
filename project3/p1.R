@@ -15,7 +15,7 @@ censor <- pbc$status[1:312]
 censor[censor == 1] = 0
 censor[censor == 2] = 1
 train$censor <-  censor
-# Add sqauaerd and log() continuous variables
+# Add square and log() of continuous variables
 train$age2 <- (train$age)^2
 train$lage <- log(train$age)
 train$bili2 <- (train$bili)^2
@@ -30,21 +30,28 @@ train$ast2 <- (train$ast)^2
 train$last <- log(train$ast)
 
 
-
-
 # Elimination strategy: Remove highest p-value until all <= 0.05.
 # Function for backward elimination of features:
-elim <- function(df){
+elim <- function(df, model.type = "cox"){
   y <- "Surv(time, censor)"
-  covariates <- setdiff(colnames(df), c("id", "time", "status", "censor"))
+  covariates <- setdiff(colnames(df), c("time", "censor"))
   removed <- c()
   p.above <- TRUE
   while(p.above){
     formula <- as.formula(paste(y, paste(covariates, collapse=" + "), 
                                 sep=" ~ ")) # Create formula
-    model <- coxph(formula, data = df)
-    s <- summary(model)
-    p.vals <- s$coefficients[,5]
+    model <- p.vals <- NA
+    if(model.type == "cox"){
+      model <- coxph(formula, data = df)
+      s <- summary(model)
+      p.vals <- s$coefficients[,5]
+    } else if(model.type == "surv"){
+      model <- survreg(formula, data = df)
+      s <- summary(model)
+      p.vals <- s$table[2:length(covariates), 4]
+    } else{
+      stop("Invalid model.")
+    }
     if(sum(p.vals > 0.05) == 0 || length(covariates) == 1){ # Stop elim
       p.above = FALSE
     } else{
@@ -80,8 +87,22 @@ max(sum0$coefficients[, 5])
 
 
 ## b) ----
-wmod0 <- survreg(Surv(time, censor) ~ age + sex + ascites + hepato + spiders + edema + bili +
-                   albumin + protime + alk.phos + ast + stage + trt,
-                 data = train)
-s <- summary(wmod0)
-s$table
+lw <- elim(train, model.type = "surv")
+surv.mod <- lw$model
+gamma <- surv.mod$coefficients
+beta <- -gamma[2:length(gamma)]/surv.mod$scale
+beta
+mod.elim$coefficients
+r.surv <- exp(as.matrix(train[, names(beta)]) %*%
+               beta)
+
+# Plot errf together
+r.df$r.surv <- r.surv
+r.df$log.r.surv <- log(r.surv)
+ggplot(r.df, aes(x = x)) + geom_point(aes(y = log.r.est, color = "Estimated r"))+
+  geom_point(aes(y = log.r.surv, color = "Estimated r (Weibull)")) + 
+  xlab("i") + ylab("log(r)") + 
+  scale_color_manual(name = " ", values = c("Estimated r" = "blue", 
+                                            "Estimated r (Weibull)" = "red")) + 
+  theme_minimal()
+
