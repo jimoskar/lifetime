@@ -1,7 +1,8 @@
 ### Problem 1 ----
 library(survival)
+library(xtable)
+library(ggplot2)
 data(pbc,package="survival")
-names(pbc)
 
 ## a) ----
 
@@ -48,7 +49,7 @@ elim <- function(df, model.type = "cox"){
     } else if(model.type == "surv"){
       model <- survreg(formula, data = df)
       s <- summary(model)
-      p.vals <- s$table[2:length(covariates), 4]
+      p.vals <- s$table[2:(length(covariates)+1), 4]
     } else{
       stop("Invalid model.")
     }
@@ -63,46 +64,62 @@ elim <- function(df, model.type = "cox"){
   return(list(model = model, removed = removed))
 }
 
-l <- elim(train)
-l$removed
-mod.elim <- l$model
+# Run step-wise backward elimination procedure
+elim.cox <- elim(train)
+elim.cox$removed
+mod.cox <- elim.cox$model
 
-r.est <- exp(as.matrix(train[, names(mod.elim$coefficients)]) %*%
-               mod.elim$coefficients)
+r.cox <- exp(as.matrix(train[, names(mod.cox$coefficients)]) %*%
+               mod.cox$coefficients)
 
-r.df <- data.frame(log.r.est = log(r.est), r.est = r.est, x = 1:312)
-ggplot(r.df, aes(x = x)) + geom_point(aes(y = log.r.est, color = "Estimated r")) +
-  xlab("i") + ylab("log(r)") + 
+# Plot errf
+r.df <- data.frame(log.r.cox = log(r.cox), r.cox = r.cox, x = 1:312)
+ggplot(r.df, aes(x = x)) + geom_point(aes(y = log.r.cox, color = "Estimated r")) +
+  xlab("Case no. i") + ylab("log(r)") + 
   scale_color_manual(name = " ", values = c("Estimated r" = "blue")) + 
   theme_minimal()
-
-
-mod0 <- coxph(Surv(time, censor) ~ age + sex + ascites + hepato + spiders + edema + bili +
-                          albumin + protime + alk.phos + ast + stage + trt,
-      data = pbc)
-sum0 <- summary(mod)
-sum0$coefficients
-max(sum0$coefficients[, 5])
-
-
+ggsave("figures/errf_cox.pdf", height = 5, width = 8)
 
 ## b) ----
-lw <- elim(train, model.type = "surv")
-surv.mod <- lw$model
-gamma <- surv.mod$coefficients
-beta <- -gamma[2:length(gamma)]/surv.mod$scale
-beta
-mod.elim$coefficients
+elim.surv <- elim(train, model.type = "surv")
+elim.surv$removed
+mod.surv <- elim.surv$model
+
+# Find corresponding coefficients
+gamma <- mod.surv$coefficients
+beta <- -gamma[2:length(gamma)]/mod.surv$scale
 r.surv <- exp(as.matrix(train[, names(beta)]) %*%
                beta)
 
 # Plot errf together
 r.df$r.surv <- r.surv
 r.df$log.r.surv <- log(r.surv)
-ggplot(r.df, aes(x = x)) + geom_point(aes(y = log.r.est, color = "Estimated r"))+
+ggplot(r.df, aes(x = x)) + 
+  geom_point(aes(y = log.r.cox, color = "Estimated r (Cox)"))+
   geom_point(aes(y = log.r.surv, color = "Estimated r (Weibull)")) + 
   xlab("i") + ylab("log(r)") + 
-  scale_color_manual(name = " ", values = c("Estimated r" = "blue", 
+  scale_color_manual(name = " ", 
+                     values = c("Estimated r (Cox)" = "blue", 
                                             "Estimated r (Weibull)" = "red")) + 
   theme_minimal()
+ggsave("figures/errf_both.pdf", height = 5, width = 8)
+
+## c) ----
+# Construct table with coefficients
+sum.surv <- summary(mod.surv)
+p.vals <- sum.surv$table[2:(length(mod.surv$coefficients)),4]
+df <- data.frame("coef" = beta, "p-value" = p.vals)
+xtable(df, digits = 4)
+
+
+## d) ----
+marg.var <- diag(sum.surv$var)
+z.alpha <- qnorm(0.05, lower.tail = FALSE)
+params <- sum.surv$table[,1]
+lower <- params - z.alpha*sqrt(marg.var)
+upper <- params + z.alpha*sqrt(marg.var)
+conf.ints <- data.frame(upper = upper, lower = lower)
+conf.ints
+
+
 
