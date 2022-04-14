@@ -119,7 +119,47 @@ params <- sum.surv$table[,1]
 lower <- params - z.alpha*sqrt(marg.var)
 upper <- params + z.alpha*sqrt(marg.var)
 conf.ints <- data.frame(upper = upper, lower = lower)
-conf.ints
+xtable(conf.ints, digits = 5)
+
+
+# Remove??
+f <- function(phi, gamma, x){
+  val <- exp(-phi)*t(gamma)%*%x
+  return(val)
+}
+
+var.T <- function(phi, gamma, x, var.phi, var.g, cov.pg){
+  g.x <- t(gamma)%*%x
+  val <- exp(-2*phi)*(g.x^2*var.phi + sum(x^2*var.g) -
+                        2*g.x*sum(x*cov.pg))
+  return(val)
+}
+
+# Find variance of errf
+var.vec <- rep(NA, 312)
+covariates <- names(tail(mod.surv$coefficients,-1))
+phi <- params[8]
+gamma <- params[2:8]
+var.phi <- marg.var[9]
+var.g <- marg.var[2:8]
+cov.pg <- mod.surv$var[9, 2:8]
+for(i in 1:312){
+  x <- train[i, covariates]
+  var.vec[i] <- var.T(phi, as.numeric(gamma), as.numeric(x),
+                      var.phi, var.g, cov.pg) 
+}
+
+r.df$upper <- r.df$log.r.surv + z.alpha*sqrt(var.vec)
+r.df$lower <- r.df$log.r.surv - z.alpha*sqrt(var.vec)
+
+ggplot(r.df, aes(x = x)) + 
+  geom_errorbar(aes(ymin=lower, ymax=upper, colour="Confidence interval"), width=2, size = 0.2) + 
+  geom_point(aes(y = log.r.surv, color = "Estimated r (Weibull)"), size = 0.2) +
+  xlab("i") + ylab("log(r)") + 
+  scale_color_manual(name = " ", 
+                     values = c("Estimated r (Weibull)" = "red", "Confidence interval" = "blue" )) + 
+  theme_minimal()
+ggsave("figures/errf_both.pdf", height = 5, width = 8)
 
 
 
