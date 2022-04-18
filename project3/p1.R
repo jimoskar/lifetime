@@ -97,7 +97,7 @@ r.df$log.r.surv <- log(r.surv)
 ggplot(r.df, aes(x = x)) + 
   geom_point(aes(y = log.r.cox, color = "Estimated r (Cox)"))+
   geom_point(aes(y = log.r.surv, color = "Estimated r (Weibull)")) + 
-  xlab("i") + ylab("log(r)") + 
+  xlab("Case no. i") + ylab("log(r)") + 
   scale_color_manual(name = " ", 
                      values = c("Estimated r (Cox)" = "blue", 
                                             "Estimated r (Weibull)" = "red")) + 
@@ -153,13 +153,15 @@ r.df$upper <- r.df$log.r.surv + z.alpha*sqrt(var.vec)
 r.df$lower <- r.df$log.r.surv - z.alpha*sqrt(var.vec)
 
 ggplot(r.df, aes(x = x)) + 
-  geom_errorbar(aes(ymin=lower, ymax=upper, colour="Confidence interval"), width=2, size = 0.2) + 
+  geom_errorbar(aes(ymin=lower, ymax=upper, colour="Confidence interval"), width=2, size = 0.5) + 
   geom_point(aes(y = log.r.surv, color = "Estimated r (Weibull)"), size = 0.2) +
-  xlab("i") + ylab("log(r)") + 
+  xlab("Case no. i") + ylab(" ") + 
   scale_color_manual(name = " ", 
-                     values = c("Estimated r (Weibull)" = "red", "Confidence interval" = "blue" )) + 
+                     values = c("Estimated r (Weibull)" = "blue4", 
+                                "Confidence interval" = "slategray2" ),
+                     labels = expression(hat(beta)%.%x, paste("C.I."))) + 
   theme_minimal()
-ggsave("figures/errf_both.pdf", height = 5, width = 8)
+ggsave("figures/errf_confint.pdf", height = 4, width = 10)
 
 
 
