@@ -108,8 +108,9 @@ ggsave("figures/errf_both.pdf", height = 5, width = 8)
 # Construct table with coefficients
 sum.surv <- summary(mod.surv)
 p.vals <- sum.surv$table[2:(length(mod.surv$coefficients)),4]
-df <- data.frame("coef" = beta, "p-value" = p.vals)
-xtable(df, digits = 4)
+mean.vals <- beta * mod.surv$means[2:(length(beta) + 1)]
+df <- data.frame("coef" = beta, "p-value" = p.vals, "means" = mean.vals)
+xtable(df, digits = 5)
 
 
 ## d) ----
@@ -121,13 +122,7 @@ upper <- params + z.alpha*sqrt(marg.var)
 conf.ints <- data.frame(upper = upper, lower = lower)
 xtable(conf.ints, digits = 5)
 
-
-# Remove??
-f <- function(phi, gamma, x){
-  val <- exp(-phi)*t(gamma)%*%x
-  return(val)
-}
-
+# Variance of Taylor expansion
 var.T <- function(phi, gamma, x, var.phi, var.g, cov.pg){
   g.x <- t(gamma)%*%x
   val <- exp(-2*phi)*(g.x^2*var.phi + sum(x^2*var.g) -
@@ -149,9 +144,11 @@ for(i in 1:312){
                       var.phi, var.g, cov.pg) 
 }
 
+# Add confindence intervals to dataframe
 r.df$upper <- r.df$log.r.surv + z.alpha*sqrt(var.vec)
 r.df$lower <- r.df$log.r.surv - z.alpha*sqrt(var.vec)
 
+# Plot result
 ggplot(r.df, aes(x = x)) + 
   geom_errorbar(aes(ymin=lower, ymax=upper, colour="Confidence interval"), width=2, size = 0.5) + 
   geom_point(aes(y = log.r.surv, color = "Estimated r (Weibull)"), size = 0.2) +
@@ -161,7 +158,48 @@ ggplot(r.df, aes(x = x)) +
                                 "Confidence interval" = "slategray2" ),
                      labels = expression(hat(beta)%.%x, paste("C.I."))) + 
   theme_minimal()
-ggsave("figures/errf_confint.pdf", height = 4, width = 10)
+ggsave("figures/errf_confint.pdf", height = 5, width = 10)
 
 
+## e) ----
+
+#Initialize parameters
+t <- 1500
+f.vec <- f.lower <- f.upper <- rep(NA, 312)
+mu <- params[1]
+
+# Find pred.int. for cloglog transformation
+for(i in 1:312){
+  x <- train[i, covariates]
+  g.x <- t(as.numeric(gamma))%*%as.numeric(x)
+  c <- log(t) - mu - g.x # const. which is reused
+  f.val <- exp(-phi)*c
+  a <- -exp(-phi)*as.numeric(c(1, x, c))
+  b <- exp(-phi)*(log(t) - g.x + c*phi + sum(x*gamma))
+  
+  sdev <- sqrt(t(a)%*%mod.surv$var%*%a)
+  f.lower[i] <- f.val - z.alpha*sdev
+  f.upper[i] <- f.val + z.alpha*sdev
+  f.vec[i] <- f.val
+}
+
+# Inverse of cloglog
+inv.cloglog <- function(x){
+  return(exp(-exp(x)))
+}
+
+# Plot pred.ints.
+S.df <- data.frame(S = inv.cloglog(f.vec), lower = inv.cloglog(f.upper),
+                   upper = inv.cloglog(f.lower), x = 1:312)
+
+ggplot(S.df, aes(x = x)) + 
+  geom_errorbar(aes(ymin=lower, ymax=upper, colour="Prediction Interval"), width=2, size = 0.5) + 
+  geom_point(aes(y = S, color = "cloglog(S)"), size = 0.2) +
+  xlab("Case no. i") + ylab(" ") + 
+  scale_color_manual(name = " ", 
+                     values = c("cloglog(S)" = "blue4", 
+                                "Prediction Interval" = "slategray2"),
+                     labels = expression(hat(S), paste("P.I."))) + 
+  theme_minimal()
+ggsave("figures/S.pdf", width = 10, height = 5)
 
