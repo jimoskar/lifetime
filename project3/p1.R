@@ -105,11 +105,14 @@ ggplot(r.df, aes(x = x)) +
 ggsave("figures/errf_both.pdf", height = 5, width = 8)
 
 ## c) ----
-# Construct table with coefficients
+# Construct table with coefficients and stats
+covariates <- names(tail(mod.surv$coefficients,-1))
+X <- train[ , covariates]
+sd.X <- apply(X, 2, sd)
+variation <- sd.X * beta
 sum.surv <- summary(mod.surv)
 p.vals <- sum.surv$table[2:(length(mod.surv$coefficients)),4]
-mean.vals <- beta * mod.surv$means[2:(length(beta) + 1)]
-df <- data.frame("coef" = beta, "p-value" = p.vals, "means" = mean.vals)
+df <- data.frame("coef" = beta, "p-value" = p.vals,"var" = variation)
 xtable(df, digits = 5)
 
 
@@ -132,7 +135,6 @@ var.T <- function(phi, gamma, x, var.phi, var.g, cov.pg){
 
 # Find variance of errf
 var.vec <- rep(NA, 312)
-covariates <- names(tail(mod.surv$coefficients,-1))
 phi <- params[8]
 gamma <- params[2:8]
 var.phi <- marg.var[9]
