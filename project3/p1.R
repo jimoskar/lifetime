@@ -66,15 +66,15 @@ elim <- function(df, model.type = "cox"){
 
 # Run step-wise backward elimination procedure
 elim.cox <- elim(train)
-elim.cox$removed
+elim.cox$removed # Removed covariates
 mod.cox <- elim.cox$model
 
+# Calculate exponential relative risk functions (errf)
 r.cox <- exp(as.matrix(train[, names(mod.cox$coefficients)]) %*%
                mod.cox$coefficients)
-
-# Plot errf
-r.df <- data.frame(log.r.cox = log(r.cox), r.cox = r.cox, x = 1:312)
-ggplot(r.df, aes(x = x)) + geom_point(aes(y = log.r.cox, color = "Estimated r")) +
+# Plot (log of) errf
+r.df <- data.frame(r.cox = r.cox, x = 1:312)
+ggplot(r.df, aes(x = x)) + geom_point(aes(y = log(r.cox), color = "Estimated r")) +
   xlab("Case no. i") + ylab("log(r)") + 
   scale_color_manual(name = " ", values = c("Estimated r" = "blue")) + 
   theme_minimal()
@@ -82,21 +82,20 @@ ggsave("figures/errf_cox.pdf", height = 5, width = 8)
 
 ## b) ----
 elim.surv <- elim(train, model.type = "surv")
-elim.surv$removed
+elim.surv$removed # Removed covariates
 mod.surv <- elim.surv$model
 
-# Find corresponding coefficients
-gamma <- mod.surv$coefficients
-beta <- -gamma[2:length(gamma)]/mod.surv$scale
+# Find corresponding coefficients and errf
+gamma <- tail(mod.surv$coefficients, -1)
+beta <- -gamma/mod.surv$scale
 r.surv <- exp(as.matrix(train[, names(beta)]) %*%
                beta)
 
 # Plot errf together
 r.df$r.surv <- r.surv
-r.df$log.r.surv <- log(r.surv)
 ggplot(r.df, aes(x = x)) + 
-  geom_point(aes(y = log.r.cox, color = "Estimated r (Cox)"))+
-  geom_point(aes(y = log.r.surv, color = "Estimated r (Weibull)")) + 
+  geom_point(aes(y = log(r.cox), color = "Estimated r (Cox)"))+
+  geom_point(aes(y = log(r.surv), color = "Estimated r (Weibull)")) + 
   xlab("Case no. i") + ylab("log(r)") + 
   scale_color_manual(name = " ", 
                      values = c("Estimated r (Cox)" = "blue", 
@@ -106,7 +105,7 @@ ggsave("figures/errf_both.pdf", height = 5, width = 8)
 
 ## c) ----
 # Construct table with coefficients and stats
-covariates <- names(tail(mod.surv$coefficients,-1))
+covariates <- names(beta)
 X <- train[ , covariates]
 sd.X <- apply(X, 2, sd)
 variation <- sd.X * beta
@@ -135,25 +134,24 @@ var.T <- function(phi, gamma, x, var.phi, var.g, cov.pg){
 
 # Find variance of errf
 var.vec <- rep(NA, 312)
-phi <- params[8]
-gamma <- params[2:8]
+phi <- params[9]
 var.phi <- marg.var[9]
-var.g <- marg.var[2:8]
+var.gamma <- marg.var[2:8]
 cov.pg <- mod.surv$var[9, 2:8]
 for(i in 1:312){
   x <- train[i, covariates]
   var.vec[i] <- var.T(phi, as.numeric(gamma), as.numeric(x),
-                      var.phi, var.g, cov.pg) 
+                      var.phi, var.gamma, cov.pg) 
 }
 
 # Add confindence intervals to dataframe
-r.df$upper <- r.df$log.r.surv + z.alpha*sqrt(var.vec)
-r.df$lower <- r.df$log.r.surv - z.alpha*sqrt(var.vec)
+r.df$upper <- log(r.df$r.surv) + z.alpha*sqrt(var.vec)
+r.df$lower <- log(r.df$r.surv) - z.alpha*sqrt(var.vec)
 
 # Plot result
 ggplot(r.df, aes(x = x)) + 
   geom_errorbar(aes(ymin=lower, ymax=upper, colour="Confidence interval"), width=2, size = 0.5) + 
-  geom_point(aes(y = log.r.surv, color = "Estimated r (Weibull)"), size = 0.2) +
+  geom_point(aes(y = log(r.surv), color = "Estimated r (Weibull)"), size = 0.2) +
   xlab("Case no. i") + ylab(" ") + 
   scale_color_manual(name = " ", 
                      values = c("Estimated r (Weibull)" = "blue4", 
@@ -165,7 +163,7 @@ ggsave("figures/errf_confint.pdf", height = 5, width = 10)
 
 ## e) ----
 
-#Initialize parameters
+# Initialize parameters
 t <- 1500
 f.vec <- f.lower <- f.upper <- rep(NA, 312)
 mu <- params[1]
@@ -178,8 +176,8 @@ for(i in 1:312){
   f.val <- exp(-phi)*c
   a <- -exp(-phi)*as.numeric(c(1, x, c))
   b <- exp(-phi)*(log(t) - g.x + c*phi + sum(x*gamma))
-  
   sdev <- sqrt(t(a)%*%mod.surv$var%*%a)
+  
   f.lower[i] <- f.val - z.alpha*sdev
   f.upper[i] <- f.val + z.alpha*sdev
   f.vec[i] <- f.val
