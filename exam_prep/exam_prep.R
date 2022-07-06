@@ -4,9 +4,9 @@ library(survival)
 library(ggplot2)
 library(ggfortify)
 df <- read.table("leukemia.txt", header = TRUE)
-km.placebo <- survfit(Surv(time[treat == 1], status[treat == 1]) ~ 1, data=df)
 km.treat <- survfit(Surv(time, status) ~ treat, data=df)
-autoplot(km.treat)
+autoplot(km.treat, conf.type = "log-log")
+plot(km.treat, conf.int = TRUE, conf.type = "log-log")
 
 ### Exercise 1.4
 # Simulate Poisson process
